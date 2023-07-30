@@ -25,16 +25,23 @@ public struct IMAGE_ARCHIVE_MEMBER_HEADER
 
 public class ArchiveMemberHeader
 {
+    public static readonly Int32 MaxShortNameLength = 15; // One byte for postfix '/'
+    public static readonly String LinkerMemberName = "/";
+    public static readonly String LongNamesMemberName = "//";
+    public static readonly String HybridMapMemberName = "/<HYBRIDMAP>/";
+    public static readonly String LongNameMemberNamePrefix = "/";
+    public static readonly String MemberNamePostfix = "/";
+
     private static readonly Byte[] DummyDate = "-1          "u8.ToArray();
     private static readonly Byte[] DummyID = "      "u8.ToArray();
     private static readonly Byte[] DummyMode = "0       "u8.ToArray();
-    public static readonly Int32 MaxShortNameLength = 15;
 
     public Byte[] Bytes;
-    public Byte PadSize;
+    public UInt32 Size;
 
-    private void Init(String LibName, UInt32 Size)
+    public ArchiveMemberHeader(String Name, UInt32 Size)
     {
+        String LibName = Name.Length > MaxShortNameLength ? Name[..MaxShortNameLength] : Name;
         String MemberSize = Size.ToString();
         Bytes = Rtl.StructToRaw(new IMAGE_ARCHIVE_MEMBER_HEADER()
         {
@@ -44,20 +51,8 @@ public class ArchiveMemberHeader
             GroupID = DummyID,
             Mode = DummyMode,
             Size = Encoding.ASCII.GetBytes(MemberSize + new String(' ', 10 - MemberSize.Length)),
-            EndHeader = Archive.End
+            EndHeader = ArchiveFile.End
         });
-        PadSize = (Byte)(Size % 2 == 0 ? 0 : 1);
+        this.Size = Size;
     }
-
-#pragma warning disable CS8618
-    public ArchiveMemberHeader(String Name, UInt32 Size)
-    {
-        Init((Name.Length > MaxShortNameLength ? Name[..MaxShortNameLength] : Name) + '/', Size);
-    }
-
-    public ArchiveMemberHeader(UInt32 LongNameOffset, UInt32 Size)
-    {
-        Init('/' + LongNameOffset.ToString(), Size);
-    }
-#pragma warning restore CS8618
 }
