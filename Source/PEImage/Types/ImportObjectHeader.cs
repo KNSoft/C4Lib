@@ -35,31 +35,37 @@ public struct IMPORT_OBJECT_HEADER
 
 public class ImportObjectHeader
 {
-    private static readonly UInt16 IMPORT_OBJECT_HDR_SIG2 = 0xFFFF;
+    public static readonly UInt16 IMPORT_OBJECT_HDR_SIG2 = 0xFFFF;
 
-    public Byte[] Bytes;
-
-    public ImportObjectHeader(IMAGE_FILE_MACHINE Machine, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType, String DllName, String DllExportName)
+    public static Byte[] GetImportNameBuffer(String DllName, String DllExportName)
     {
+        Byte[] Data;
         Byte[] DllExportNameBytes = Encoding.ASCII.GetBytes(DllExportName);
         Byte[] DllNameBytes = Encoding.ASCII.GetBytes(DllName);
 
-        Byte[] Data = new Byte[DllExportNameBytes.Length + 1 + DllNameBytes.Length + 1];
-        System.Buffer.BlockCopy(DllExportNameBytes, 0, Data, 0, DllExportNameBytes.Length);
+        Data = new Byte[DllExportNameBytes.Length + 1 + DllNameBytes.Length + 1];
+        Buffer.BlockCopy(DllExportNameBytes, 0, Data, 0, DllExportNameBytes.Length);
         Data[DllExportNameBytes.Length] = (Byte)'\0';
-        System.Buffer.BlockCopy(DllNameBytes, 0, Data, DllExportNameBytes.Length + 1, DllNameBytes.Length);
+        Buffer.BlockCopy(DllNameBytes, 0, Data, DllExportNameBytes.Length + 1, DllNameBytes.Length);
         Data[DllExportNameBytes.Length + 1 + DllNameBytes.Length] = (Byte)'\0';
 
-        Bytes = Rtl.CombineArray(Rtl.StructToRaw(new IMPORT_OBJECT_HEADER()
+        return Data;
+    }
+
+    public IMPORT_OBJECT_HEADER NativeStruct;
+
+    public ImportObjectHeader(IMAGE_FILE_MACHINE Machine, UInt32 SizeOfData, UInt16 Ordinal, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType)
+    {
+        NativeStruct = new IMPORT_OBJECT_HEADER()
         {
             Sig1 = (UInt16)IMAGE_FILE_MACHINE.UNKNOWN,
             Sig2 = IMPORT_OBJECT_HDR_SIG2,
             Version = 0,
             Machine = (UInt16)Machine,
             TimeDateStamp = 0,
-            SizeOfData = (UInt32)Data.Length,
-            Ordinal = 0,
+            SizeOfData = SizeOfData,
+            Ordinal = Ordinal,
             Type = (UInt16)(((Byte)Type & 0b11) | (((Byte)NameType & 0b111) << 2))
-        }), Data);
+        };
     }
 }

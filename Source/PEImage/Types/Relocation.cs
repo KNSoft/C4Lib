@@ -36,15 +36,15 @@ public struct IMAGE_RELOCATION
 
 public class Relocation
 {
-    public Byte[] Bytes;
+    public IMAGE_RELOCATION NativeStruct;
 
     public Relocation(UInt32 VirtualAddress, UInt32 SymbolTableIndex, UInt16 Type)
     {
-        Bytes = Rtl.StructToRaw(new IMAGE_RELOCATION()
+        NativeStruct = new IMAGE_RELOCATION()
         {
             VirtualAddress = VirtualAddress,
             SymbolTableIndex = SymbolTableIndex,
             Type = Type
-        });
+        };
     }
 }

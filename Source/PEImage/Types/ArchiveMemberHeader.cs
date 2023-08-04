@@ -25,34 +25,56 @@ public struct IMAGE_ARCHIVE_MEMBER_HEADER
 
 public class ArchiveMemberHeader
 {
-    public static readonly Int32 MaxShortNameLength = 15; // One byte for postfix '/'
-    public static readonly String LinkerMemberName = "/";
-    public static readonly String LongNamesMemberName = "//";
-    public static readonly String HybridMapMemberName = "/<HYBRIDMAP>/";
-    public static readonly String LongNameMemberNamePrefix = "/";
-    public static readonly String MemberNamePostfix = "/";
+    /* Well-known name constants */
+    public static readonly Byte[] LinkerMemberName = "/               "u8.ToArray();
+    public static readonly Byte[] LongNamesMemberName = "//              "u8.ToArray();
 
+    /* Private constants */ 
     private static readonly Byte[] DummyDate = "-1          "u8.ToArray();
     private static readonly Byte[] DummyID = "      "u8.ToArray();
     private static readonly Byte[] DummyMode = "0       "u8.ToArray();
 
-    public Byte[] Bytes;
+    /* Public properties */
+    public IMAGE_ARCHIVE_MEMBER_HEADER NativeStruct;
     public UInt32 Size;
-
-    public ArchiveMemberHeader(String Name, UInt32 Size)
+    public ArchiveMemberHeader(Byte[] NameBytes, UInt32 Size)
     {
-        String LibName = Name.Length > MaxShortNameLength ? Name[..MaxShortNameLength] : Name;
-        String MemberSize = Size.ToString();
-        Bytes = Rtl.StructToRaw(new IMAGE_ARCHIVE_MEMBER_HEADER()
+        Byte[] FilledNameBytes = new Byte[16];
+
+        NameBytes.CopyTo(FilledNameBytes, 0);
+        for (Int32 i = NameBytes.Length; i < FilledNameBytes.Length; i++)
         {
-            Name = Encoding.ASCII.GetBytes(LibName + new String(' ', 16 - LibName.Length)),
+            FilledNameBytes[i] = (Byte)' ';
+        }
+
+        this.Size = Size;
+        String MemberSize = Size.ToString();
+        NativeStruct = new IMAGE_ARCHIVE_MEMBER_HEADER()
+        {
+            Name = FilledNameBytes,
             Date = DummyDate,
             UserID = DummyID,
             GroupID = DummyID,
             Mode = DummyMode,
             Size = Encoding.ASCII.GetBytes(MemberSize + new String(' ', 10 - MemberSize.Length)),
             EndHeader = ArchiveFile.End
-        });
-        this.Size = Size;
+        };
+    }
+
+    public static Byte[] GetNameBytes(UInt32 NameOffset)
+    {
+        return Encoding.ASCII.GetBytes("/" + NameOffset.ToString());
+    }
+
+    public static Byte[]? GetNameBytes(String Name)
+    {
+        Byte[] NameBytes = Encoding.ASCII.GetBytes(Name + "/");
+
+        if (NameBytes.Length > 16)
+        {
+            return null;
+        }
+
+        return NameBytes;
     }
 }

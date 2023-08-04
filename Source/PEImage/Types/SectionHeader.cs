@@ -35,7 +35,7 @@ public struct IMAGE_SECTION_HEADER
 
 public class SectionHeader
 {
-    public Byte[] Bytes;
+    public IMAGE_SECTION_HEADER NativeStruct;
 
     public enum SCN : UInt32
     {
@@ -51,10 +51,12 @@ public class SectionHeader
 
     public SectionHeader(String Name, UInt32 DataOffset, UInt32 DataSize, UInt32 RelocationsOffset, UInt16 NumberOfRelocations, IMAGE_SCN Characteristics)
     {
-        String SecName = Name.Length > 8 ? Name[..8] : Name;
-        Bytes = Rtl.StructToRaw(new IMAGE_SECTION_HEADER()
+        Byte[] NameBytes = new Byte[8];
+        Encoding.UTF8.GetBytes(Name).CopyTo(NameBytes, 0);
+
+        NativeStruct = new IMAGE_SECTION_HEADER()
         {
-            Name = Encoding.ASCII.GetBytes(SecName + new String('\0', 8 - SecName.Length)),
+            Name = NameBytes,
             VirtualSize = 0,
             VirtualAddress = 0,
             PointerToLinenumbers = 0,
@@ -64,6 +66,6 @@ public class SectionHeader
             PointerToRelocations = RelocationsOffset,
             NumberOfRelocations = NumberOfRelocations,
             Characteristics = (UInt32)Characteristics
-        });
+        };
     }
 }

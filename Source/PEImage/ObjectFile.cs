@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -8,86 +9,152 @@ namespace KNSoft.C4Lib.PEImage;
 
 public class ObjectFile
 {
-    private struct Section
+    public class Section
     {
-        public String Name;
-        public IMAGE_SCN Align;
+        public SectionHeader Header;
         public Byte[] Data;
-        public Relocation[]? Reloc;
+        public Relocation[]? Relocations;
 
-        public Section(String Name, IMAGE_SCN Align, Byte[] Data, Relocation[]? Reloc)
+        public Section(String Name, Byte[] Data, Relocation[]? Relocations, IMAGE_SCN Characteristics)
         {
-            this.Name = Name;
-            this.Align = Align;
+            Header = new(Name, 0, (UInt32)Data.Length, 0, (UInt16)(Relocations == null ? 0 : Relocations.Length), Characteristics);
             this.Data = Data;
-            this.Reloc = Reloc;
+            this.Relocations = Relocations;
+        }
+    }
+
+    public FileHeader FileHeader;
+
+    public readonly List<Section> Sections = new();
+
+    public readonly List<Symbol> Symbols = new();
+
+    public readonly List<KeyValuePair<UInt32, Byte[]>> StringTable = new(); // Offset -> String
+
+    public readonly List<String> SymbolNames = new();
+
+    public ObjectFile(IMAGE_FILE_MACHINE Machine, IMAGE_FILE_CHARACTERISTICS AdditionalFileCharacteristics)
+    {
+        FileHeader = new(Machine, AdditionalFileCharacteristics);
+    }
+
+    public UInt16 AddSection(Section Section)
+    {
+        Sections.Add(Section);
+
+        /* Update offsets */
+
+        UInt32 Offset = (UInt32)(Marshal.SizeOf<IMAGE_FILE_HEADER>() + Sections.Count * Marshal.SizeOf<IMAGE_SECTION_HEADER>());
+
+        foreach (Section ExistingSection in Sections)
+        {
+            if (ExistingSection.Data.Length > 0)
+            {
+                ExistingSection.Header.NativeStruct.PointerToRawData = Offset;
+                Offset += (UInt32)ExistingSection.Data.Length;
+            }
+            if (ExistingSection.Relocations != null)
+            {
+                ExistingSection.Header.NativeStruct.PointerToRelocations = Offset;
+                Offset += (UInt32)(ExistingSection.Relocations.Length * Marshal.SizeOf<IMAGE_RELOCATION>());
+            }
+        }
+
+        FileHeader.NativeStruct.PointerToSymbolTable = Offset;
+
+        return FileHeader.NativeStruct.NumberOfSections++;
+    }
+
+    public void AddSymbol(String Name, UInt32 Value, Int16 SectionNumber, IMAGE_SYM_TYPE TypeMSB, IMAGE_SYM_DTYPE TypeLSB, IMAGE_SYM_CLASS StorageClass)
+    {
+        Byte[]? NameBytes = Symbol.GetNameBytes(Name);
+
+        if (NameBytes == null)
+        {
+            UInt32 Offset = StringTable.Count == 0 ? sizeof(UInt32) : (StringTable.Last().Key + (UInt32)StringTable.Last().Value.Length + 1);
+            StringTable.Add(new(Offset, Encoding.ASCII.GetBytes(Name)));
+            NameBytes = Symbol.GetNameBytes(Offset);
+        }
+
+        Symbols.Add(new(NameBytes, Value, SectionNumber, TypeMSB, TypeLSB, StorageClass));
+
+        if (StorageClass == IMAGE_SYM_CLASS.EXTERNAL &&
+            SectionNumber > 0)
+        {
+            SymbolNames.Add(Name);
+        }
+
+        FileHeader.NativeStruct.NumberOfSymbols++;
+    }
+
+    public void Write(Stream Output)
+    {
+        /* Write file header (IMAGE_FILE_HEADER) */
+        Rtl.WriteToStream(Output, Rtl.StructToRaw(FileHeader.NativeStruct));
+
+        /* Write section headers (IMAGE_SECTION_HEADER) */
+        foreach (Section Section in Sections)
+        {
+            Rtl.WriteToStream(Output, Rtl.StructToRaw(Section.Header.NativeStruct));
+        }
+
+        /* Write section data and relocations */
+        foreach (Section Section in Sections)
+        {
+            if (Section.Data.Length > 0)
+            {
+                Rtl.WriteToStream(Output, Section.Data);
+            }
+            if (Section.Relocations != null)
+            {
+                foreach (Relocation Relocation in Section.Relocations)
+                {
+                    Rtl.WriteToStream(Output, Rtl.StructToRaw(Relocation.NativeStruct));
+                }
+            }
+        }
+
+        /* Write symbols (IMAGE_SYMBOL) */
+        foreach (Symbol Symbol in Symbols)
+        {
+            Rtl.WriteToStream(Output, Rtl.StructToRaw(Symbol.NativeStruct));
+        }
+
+        /* Write string table */
+        Rtl.WriteToStream(Output, BitConverter.GetBytes((UInt32)(sizeof(UInt32) + StringTable.Sum(x => x.Value.Length) + StringTable.Count)));
+        foreach (var StringTableItem in StringTable)
+        {
+            Rtl.WriteToStream(Output, StringTableItem.Value);
+            Output.WriteByte(0);
         }
     }
 
     private static readonly String NullIIDSymbolName = "__NULL_IMPORT_DESCRIPTOR";
 
-    public static String WriteNullIIDObjectFile(Stream Output, IMAGE_FILE_MACHINE Machine)
+    public static ObjectFile NewNullIIDObject(IMAGE_FILE_MACHINE Machine)
     {
-        /* Something depends on machine type */
-        IMAGE_FILE_CHARACTERISTICS FileCharacteristics = IMAGE_FILE_CHARACTERISTICS.DEBUG_STRIPPED;
-        if (FileHeader.GetMachineBits(Machine) == 32)
-        {
-            FileCharacteristics |= IMAGE_FILE_CHARACTERISTICS._32BIT_MACHINE;
-        }
+        ObjectFile NewObject = new(Machine, IMAGE_FILE_CHARACTERISTICS.DEBUG_STRIPPED);
 
-        /* Section and symbol*/
-        Section Section = new(".idata$3", IMAGE_SCN.ALIGN_4BYTES, new Byte[Marshal.SizeOf<IMAGE_IMPORT_DESCRIPTOR>()], null);
-        Symbol Symbol = new(0, 0, 1, 0, IMAGE_SYM_CLASS.EXTERNAL);
+        UInt16 idata3Index = NewObject.AddSection(new(".idata$3",
+                                                      new Byte[Marshal.SizeOf<IMAGE_IMPORT_DESCRIPTOR>()],
+                                                      null,
+                                                      (IMAGE_SCN)SectionHeader.SCN.idata | IMAGE_SCN.ALIGN_4BYTES));
 
-        /* Write data */
-        UInt32 RawOffset = (UInt32)(Marshal.SizeOf<IMAGE_FILE_HEADER>() + Marshal.SizeOf<IMAGE_SECTION_HEADER>());
-        Rtl.WriteToStream(Output, new FileHeader(Machine,
-                                                 1,
-                                                 RawOffset,
-                                                 1,
-                                                 FileCharacteristics).Bytes);
-        Rtl.WriteToStream(Output, new SectionHeader(Section.Name,
-                                                    RawOffset,
-                                                    (UInt32)Section.Data.Length,
-                                                    0,
-                                                    0,
-                                                    (IMAGE_SCN)SectionHeader.SCN.idata | Section.Align).Bytes);
-        Rtl.WriteToStream(Output, Section.Data);
-        Rtl.WriteToStream(Output, Symbol.Bytes);
-        Rtl.WriteToStream(Output, BitConverter.GetBytes(sizeof(UInt32) + (UInt32)NullIIDSymbolName.Length + 1));
-        Rtl.WriteToStream(Output, Encoding.ASCII.GetBytes(NullIIDSymbolName));
-        Output.WriteByte(0);
+        NewObject.AddSymbol(NullIIDSymbolName,
+                            0,
+                            (Int16)(idata3Index + 1),
+                            IMAGE_SYM_TYPE.NULL,
+                            IMAGE_SYM_DTYPE.NULL,
+                            IMAGE_SYM_CLASS.EXTERNAL);
 
-        return NullIIDSymbolName;
+        return NewObject;
     }
 
-    private static String[] GetImportStubSymbolNames(String DllName)
+    public static ObjectFile NewDllImportStubObject(IMAGE_FILE_MACHINE Machine, String DllName)
     {
-        String DllShortName = Path.HasExtension(DllName) ? Path.ChangeExtension(DllName, null) : DllName;
+        ObjectFile NewObject = new(Machine, IMAGE_FILE_CHARACTERISTICS.DEBUG_STRIPPED);
 
-        return new[]
-        {
-            /* 0 */ "__IMPORT_DESCRIPTOR_" + DllShortName,
-            /* 1 */ '\x7F' + DllShortName + "_NULL_THUNK_DATA"
-        };
-    }
-
-    public static String[] WriteDllImportStubObjectFile(Stream Output, IMAGE_FILE_MACHINE Machine, String DllName)
-    {
-        UInt32 MachineBits;
-        UInt32 Offset;
-        UInt16 RelocType;
-        UInt32 SizeOfPointer;
-
-        /* Something depends on machine type */
-        IMAGE_FILE_CHARACTERISTICS FileCharacteristics = IMAGE_FILE_CHARACTERISTICS.DEBUG_STRIPPED;
-        MachineBits = FileHeader.GetMachineBits(Machine);
-        if (MachineBits == 32)
-        {
-            FileCharacteristics |= IMAGE_FILE_CHARACTERISTICS._32BIT_MACHINE;
-        }
-        SizeOfPointer = MachineBits / 8;
-        RelocType = Machine switch
+        UInt16 RelocType = Machine switch
         {
             IMAGE_FILE_MACHINE.I386 => (UInt16)IMAGE_REL.I386.DIR32NB,
             IMAGE_FILE_MACHINE.AMD64 => (UInt16)IMAGE_REL.AMD64.ADDR32NB,
@@ -96,116 +163,40 @@ public class ObjectFile
             _ => throw new NotImplementedException("Unsupported machine type: " + Machine.ToString())
         };
 
-        /* Symbol names of IID and thunk */
-        String[] SymbolNames = GetImportStubSymbolNames(DllName);
+        /* Add sections */
+        UInt16 idata2Index = NewObject.AddSection(new(".idata$2",
+                                                      new Byte[Marshal.SizeOf<IMAGE_IMPORT_DESCRIPTOR>()],
+                                                      new Relocation[]
+                                                      {
+                                                          new(0xC, 2, RelocType),
+                                                          new(0x0, 3, RelocType),
+                                                          new(0x10, 4, RelocType)
+                                                      },
+                                                      (IMAGE_SCN)SectionHeader.SCN.idata | IMAGE_SCN.ALIGN_4BYTES));
+        UInt16 idata6Index = NewObject.AddSection(new(".idata$6",
+                                                      Encoding.ASCII.GetBytes(DllName + (DllName.Length % 2 == 0 ? "\0\0" : "\0")),
+                                                      null,
+                                                      (IMAGE_SCN)SectionHeader.SCN.idata | IMAGE_SCN.ALIGN_2BYTES));
+        UInt16 idata5Index = NewObject.AddSection(new(".idata$5",
+                                                      new Byte[NewObject.FileHeader.SizeOfPointer],
+                                                      null,
+                                                      (IMAGE_SCN)SectionHeader.SCN.idata | IMAGE_SCN.ALIGN_4BYTES));
+        UInt16 idata4Index = NewObject.AddSection(new(".idata$4",
+                                                      new Byte[NewObject.FileHeader.SizeOfPointer],
+                                                      null,
+                                                      (IMAGE_SCN)SectionHeader.SCN.idata | IMAGE_SCN.ALIGN_4BYTES));
 
-        /* Build string table */
-        List<KeyValuePair<UInt32, String>> StringTable = new();
-        Offset = sizeof(UInt32);
-        for (Int32 i = 0; i < SymbolNames.Length; i++)
-        {
-            StringTable.Add(new(Offset, SymbolNames[i]));
-            Offset += (UInt32)SymbolNames[i].Length + 1;
-        }
+        /* Add symbols */
+        String DllShortName = Path.HasExtension(DllName) ? Path.ChangeExtension(DllName, null) : DllName;
 
-        /* Relocations in idata2 */
-        Relocation[]? idata2Relocs = new Relocation[]
-        {
-            new(0xC, 2, RelocType),
-            new(0x0, 3, RelocType),
-            new(0x10, 4, RelocType)
-        };
+        NewObject.AddSymbol("__IMPORT_DESCRIPTOR_" + DllShortName, 0, (Int16)(idata2Index + 1), IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.EXTERNAL);
+        NewObject.AddSymbol(".idata$2", (UInt32)SectionHeader.SCN.idata, (Int16)(idata2Index + 1), IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.SECTION);
+        NewObject.AddSymbol(".idata$6", 0, (Int16)(idata6Index + 1), IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.STATIC);
+        NewObject.AddSymbol(".idata$4", (UInt32)SectionHeader.SCN.idata, (Int16)(idata4Index + 1), IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.SECTION);
+        NewObject.AddSymbol(".idata$5", (UInt32)SectionHeader.SCN.idata, (Int16)(idata5Index + 1), IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.SECTION);
+        NewObject.AddSymbol(NullIIDSymbolName, 0, 0, IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.EXTERNAL);
+        NewObject.AddSymbol('\x7F' + DllShortName + "_NULL_THUNK_DATA", 0, (Int16)(idata5Index + 1), IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.EXTERNAL);
 
-        /* Sections and symbols */
-        Section[] Sections =
-        {
-            /* 1 */ new Section(".idata$2", IMAGE_SCN.ALIGN_4BYTES, new Byte[Marshal.SizeOf<IMAGE_IMPORT_DESCRIPTOR>()], idata2Relocs),
-            /* 2 */ new Section(".idata$6", IMAGE_SCN.ALIGN_2BYTES, Encoding.ASCII.GetBytes(DllName + (DllName.Length % 2 == 0 ? "\0\0" : "\0")), null),
-            /* 3 */ new Section(".idata$5", IMAGE_SCN.ALIGN_4BYTES, new Byte[SizeOfPointer], null),
-            /* 4 */ new Section(".idata$4", IMAGE_SCN.ALIGN_4BYTES, new Byte[SizeOfPointer], null)
-        };
-        Symbol[] Symbols =
-        {
-            /* 0 */ new Symbol(StringTable[0].Key, 0, 1, 0, IMAGE_SYM_CLASS.EXTERNAL),                      // __IMPORT_DESCRIPTOR_XXX
-            /* 1 */ new Symbol(".idata$2", (UInt32)SectionHeader.SCN.idata, 1, 0, IMAGE_SYM_CLASS.SECTION), // Section of __IMPORT_DESCRIPTOR_XXX
-            /* 2 */ new Symbol(".idata$6", 0, 2, 0, IMAGE_SYM_CLASS.STATIC),                                // Section of "XXX.dll"
-            /* 3 */ new Symbol(".idata$4", (UInt32)SectionHeader.SCN.idata, 4, 0, IMAGE_SYM_CLASS.SECTION), // Section of Thunk?
-            /* 4 */ new Symbol(".idata$5", (UInt32)SectionHeader.SCN.idata, 3, 0, IMAGE_SYM_CLASS.SECTION), // Section of \x7FXXX_NULL_THUNK_DATA
-            /* 5 */ new Symbol(StringTable[1].Key, 0, 3, 0, IMAGE_SYM_CLASS.EXTERNAL)                       // \x7FXXX_NULL_THUNK_DATA
-        };
-
-        /* Write object file header */
-        UInt32 RawOffset = (UInt32)(Marshal.SizeOf<IMAGE_FILE_HEADER>() + Marshal.SizeOf<IMAGE_SECTION_HEADER>() * Sections.Length);
-        UInt32 RawSize = 0;
-        foreach (var Section in Sections)
-        {
-            RawSize += (UInt32)Section.Data.Length;
-            if (Section.Reloc != null)
-            {
-                RawSize += (UInt32)(Marshal.SizeOf<IMAGE_RELOCATION>() * Section.Reloc.Length);
-            }
-        }
-        Rtl.WriteToStream(Output, new FileHeader(Machine,
-                                                 (UInt16)Sections.Length,
-                                                 RawOffset + RawSize,
-                                                 (UInt32)Symbols.Length,
-                                                 FileCharacteristics).Bytes);
-
-        /* Write section headers */
-        Offset = RawOffset;
-        foreach (var Section in Sections)
-        {
-            UInt32 RelocOffset;
-            UInt16 RelocCount;
-            if (Section.Reloc == null)
-            {
-                RelocOffset = RelocCount = 0;
-            } else
-            {
-                RelocOffset = Offset + (UInt32)Section.Data.Length;
-                RelocCount = (UInt16)Section.Reloc.Length;
-            }
-            Rtl.WriteToStream(Output, new SectionHeader(Section.Name,
-                                                        Offset,
-                                                        (UInt32)Section.Data.Length,
-                                                        RelocOffset,
-                                                        RelocCount,
-                                                        (IMAGE_SCN)SectionHeader.SCN.idata | Section.Align).Bytes);
-            Offset += (UInt32)Section.Data.Length + (UInt32)Marshal.SizeOf<IMAGE_RELOCATION>() * RelocCount;
-        }
-
-        /* Write raw section data */
-        foreach (var Section in Sections)
-        {
-            Rtl.WriteToStream(Output, Section.Data);
-            if (Section.Reloc != null)
-            {
-                foreach (Relocation Reloc in Section.Reloc)
-                {
-                    Rtl.WriteToStream(Output, Reloc.Bytes);
-                }
-            }
-        }
-
-        /* Write symbols */
-        foreach (Symbol Symbol in Symbols)
-        {
-            Rtl.WriteToStream(Output, Symbol.Bytes);
-        }
-
-        /* Write string table */
-        RawSize = sizeof(UInt32);
-        foreach (String StringItem in SymbolNames)
-        {
-            RawSize += (UInt32)StringItem.Length + 1;
-        }
-        Rtl.WriteToStream(Output, BitConverter.GetBytes(RawSize));
-        foreach (String Item in SymbolNames)
-        {
-            Rtl.WriteToStream(Output, Encoding.ASCII.GetBytes(Item));
-            Output.WriteByte(0);
-        }
-
-        return SymbolNames;
+        return NewObject;
     }
 }

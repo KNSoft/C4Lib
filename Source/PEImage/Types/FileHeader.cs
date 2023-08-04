@@ -33,34 +33,6 @@ public struct IMAGE_FILE_HEADER
 
 public class FileHeader
 {
-    public Byte[] Bytes;
-
-    public FileHeader(IMAGE_FILE_MACHINE Machine, UInt16 NumberOfSections, UInt32 PointerToSymbolTable, UInt32 NumberOfSymbols, IMAGE_FILE_CHARACTERISTICS Characteristics)
-    {
-        Bytes = Rtl.StructToRaw(new IMAGE_FILE_HEADER()
-        {
-            Machine = (UInt16)Machine,
-            NumberOfSections = NumberOfSections,
-            TimeDateStamp = UInt32.MaxValue,
-            PointerToSymbolTable = PointerToSymbolTable,
-            NumberOfSymbols = NumberOfSymbols,
-            SizeOfOptionalHeader = 0,
-            Characteristics = (UInt16)Characteristics
-        });
-    }
-
-    public static UInt32 GetMachineBits(IMAGE_FILE_MACHINE Machine)
-    {
-        return Machine switch
-        {
-            IMAGE_FILE_MACHINE.I386 => 32,
-            IMAGE_FILE_MACHINE.AMD64 => 64,
-            IMAGE_FILE_MACHINE.ARM64 => 64,
-            IMAGE_FILE_MACHINE.ARM => 32,
-            _ => 0
-        };
-    }
-
     public static IMAGE_FILE_MACHINE GetMachineType(String Name)
     {
         return Name switch
@@ -79,6 +51,84 @@ public class FileHeader
 
             _ => IMAGE_FILE_MACHINE.UNKNOWN
         };
+    }
+
+    public static Byte GetMachineBits(IMAGE_FILE_MACHINE Machine)
+    {
+        return Machine switch
+        {
+            IMAGE_FILE_MACHINE.I386 => 32,
+            IMAGE_FILE_MACHINE.AMD64 => 64,
+            IMAGE_FILE_MACHINE.ARM64 => 64,
+            IMAGE_FILE_MACHINE.ARM => 32,
+            _ => 0
+        };
+    }
+
+    public static Byte GetSizeOfPointer(IMAGE_FILE_MACHINE Machine)
+    {
+        return (Byte)(GetMachineBits(Machine) / 8);
+    }
+
+    public IMAGE_FILE_HEADER NativeStruct;
+
+    public FileHeader(IMAGE_FILE_MACHINE Machine, UInt16 NumberOfSections, UInt32 TimeDateStamp, UInt32 PointerToSymbolTable, UInt32 NumberOfSymbols, UInt16 SizeOfOptionalHeader, IMAGE_FILE_CHARACTERISTICS Characteristics)
+    {
+        NativeStruct = new IMAGE_FILE_HEADER()
+        {
+            Machine = (UInt16)Machine,
+            NumberOfSections = NumberOfSections,
+            TimeDateStamp = TimeDateStamp,
+            PointerToSymbolTable = PointerToSymbolTable,
+            NumberOfSymbols = NumberOfSymbols,
+            SizeOfOptionalHeader = SizeOfOptionalHeader,
+            Characteristics = (UInt16)Characteristics
+        };
+    }
+
+    public FileHeader(IMAGE_FILE_MACHINE Machine, IMAGE_FILE_CHARACTERISTICS AdditionalFileCharacteristics)
+    {
+        NativeStruct = new IMAGE_FILE_HEADER()
+        {
+            Machine = (UInt16)Machine,
+            NumberOfSections = 0,
+            TimeDateStamp = UInt32.MaxValue,
+            PointerToSymbolTable = 0,
+            NumberOfSymbols = 0,
+            SizeOfOptionalHeader = 0,
+            Characteristics = (UInt16)AdditionalFileCharacteristics
+        };
+        if (MachineBits == 32)
+        {
+            NativeStruct.Characteristics |= (UInt16)IMAGE_FILE_CHARACTERISTICS._32BIT_MACHINE;
+        }
+    }
+    public IMAGE_FILE_MACHINE Machine
+    {
+        get
+        {
+            return (IMAGE_FILE_MACHINE)NativeStruct.Machine;
+        }
+        set
+        {
+            NativeStruct.Machine = (UInt16)value;
+        }
+    }
+
+    public Byte MachineBits
+    {
+        get
+        {
+            return GetMachineBits(Machine);
+        }
+    }
+
+    public Byte SizeOfPointer
+    {
+        get
+        {
+            return GetSizeOfPointer(Machine);
+        }
     }
 }
 

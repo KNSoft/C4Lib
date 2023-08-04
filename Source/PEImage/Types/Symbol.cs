@@ -4,11 +4,31 @@ using System.Text;
 
 namespace KNSoft.C4Lib.PEImage;
 
+public enum IMAGE_SYM : Int16
+{
+    UNDEFINED = 0,
+    ABSOLUTE = 1,
+    DEBUG = 2
+}
+
 public enum IMAGE_SYM_CLASS : SByte
 {
     EXTERNAL = 0x0002,
     STATIC = 0x0003,
     SECTION = 0x0068
+}
+
+/* MSB */
+public enum IMAGE_SYM_TYPE : Byte
+{
+    NULL = 0
+}
+
+/* LSB */
+public enum IMAGE_SYM_DTYPE : Byte
+{
+    NULL = 0,
+    FUNCTION = 2
 }
 
 [StructLayout(LayoutKind.Explicit, Pack = 1)]
@@ -35,33 +55,40 @@ public struct IMAGE_SYMBOL
 
 public class Symbol
 {
-    public Byte[] Bytes;
+    public IMAGE_SYMBOL NativeStruct;
 
-    public Symbol(String Name, UInt32 Value, Int16 SectionNumber, UInt16 Type, IMAGE_SYM_CLASS StorageClass)
+    public Symbol(Byte[] NameBytes, UInt32 Value, Int16 SectionNumber, IMAGE_SYM_TYPE TypeMSB, IMAGE_SYM_DTYPE TypeLSB,IMAGE_SYM_CLASS StorageClass)
     {
-        String Text = (Name.Length > 8 ? Name[..8] : Name);
-        Bytes = Rtl.StructToRaw(new IMAGE_SYMBOL()
+        NativeStruct = new IMAGE_SYMBOL()
         {
-            ShortName = Encoding.ASCII.GetBytes(Text + new String('\0', 8 - Text.Length)),
+            ShortName = NameBytes,
             Value = Value,
             SectionNumber = SectionNumber,
-            Type = Type,
+            TypeMSB = (Byte)TypeMSB,
+            TypeLSB = (Byte)TypeLSB,
             StorageClass = (SByte)StorageClass,
             NumberOfAuxSymbols = 0
-        });
+        };
     }
 
-    public Symbol(UInt32 NameIndex, UInt32 Value, Int16 SectionNumber, UInt16 Type, IMAGE_SYM_CLASS StorageClass)
+    public static Byte[] GetNameBytes(UInt32 NameOffset)
     {
-        Bytes = Rtl.StructToRaw(new IMAGE_SYMBOL()
+        return Rtl.CombineArray(BitConverter.GetBytes((UInt32)0), BitConverter.GetBytes(NameOffset));
+    }
+
+    public static Byte[]? GetNameBytes(String Name)
+    {
+        Byte[] NameBytes = new Byte[8];
+        Byte[] SourceNameBytes = Encoding.UTF8.GetBytes(Name);
+
+        if (SourceNameBytes.Length > NameBytes.Length)
         {
-            ShortName = Rtl.CombineArray(BitConverter.GetBytes((UInt32)0), BitConverter.GetBytes(NameIndex)),
-            Value = Value,
-            SectionNumber = SectionNumber,
-            Type = Type,
-            StorageClass = (SByte)StorageClass,
-            NumberOfAuxSymbols = 0
-        });
+            return null;
+        } 
+
+        SourceNameBytes.CopyTo(NameBytes, 0);
+
+        return NameBytes;
     }
 }
 
