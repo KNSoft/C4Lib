@@ -21,7 +21,7 @@ static partial class Rtl
         Int32 ItemSize = Marshal.SizeOf(new T().GetType());
         foreach (T[] ArrayItem in Arrays)
         {
-            System.Buffer.BlockCopy(ArrayItem, 0, NewArray, Offset, ArrayItem.Length * ItemSize);
+            Buffer.BlockCopy(ArrayItem, 0, NewArray, Offset, ArrayItem.Length * ItemSize);
             Offset += ArrayItem.Length;
         }
         return NewArray;
