@@ -99,7 +99,7 @@ public class ArchiveFile
     {
         /* Transform import list to symbol list and calculate size of string table */
         UInt32 StringTableSize = 0;
-        List <KeyValuePair<String, Import>> Symbols = new();
+        List<KeyValuePair<String, Import>> Symbols = new();
         foreach (Import Import in Imports)
         {
             foreach (String SymbolName in Import.SymbolNames)
