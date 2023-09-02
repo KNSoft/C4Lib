@@ -159,7 +159,7 @@ public class ObjectFile
             IMAGE_FILE_MACHINE.I386 => (UInt16)IMAGE_REL.I386.DIR32NB,
             IMAGE_FILE_MACHINE.AMD64 => (UInt16)IMAGE_REL.AMD64.ADDR32NB,
             IMAGE_FILE_MACHINE.ARM64 => (UInt16)IMAGE_REL.ARM64.ADDR32NB,
-            IMAGE_FILE_MACHINE.ARM => (UInt16)IMAGE_REL.ARM.ADDR32NB,
+            IMAGE_FILE_MACHINE.ARMNT => (UInt16)IMAGE_REL.ARM.ADDR32NB,
             _ => throw new NotImplementedException("Unsupported machine type: " + Machine.ToString())
         };
 

@@ -9,7 +9,8 @@ public enum IMAGE_FILE_MACHINE : UInt16
     I386 = 0x14C,
     AMD64 = 0x8664,
     ARM64 = 0xAA64,
-    ARM = 0x1C0
+    ARM = 0x1C0,
+    ARMNT = 0x1C4
 }
 
 [Flags]
@@ -46,8 +47,9 @@ public class FileHeader
 
             "ARM64" => IMAGE_FILE_MACHINE.ARM64,
 
-            "ARM" => IMAGE_FILE_MACHINE.ARM,
-            "ARM32" => IMAGE_FILE_MACHINE.ARM,
+            "ARM" => IMAGE_FILE_MACHINE.ARMNT,
+            "ARM32" => IMAGE_FILE_MACHINE.ARMNT,
+            "ARMv7" => IMAGE_FILE_MACHINE.ARMNT,
 
             _ => IMAGE_FILE_MACHINE.UNKNOWN
         };
@@ -61,6 +63,7 @@ public class FileHeader
             IMAGE_FILE_MACHINE.AMD64 => 64,
             IMAGE_FILE_MACHINE.ARM64 => 64,
             IMAGE_FILE_MACHINE.ARM => 32,
+            IMAGE_FILE_MACHINE.ARMNT => 32,
             _ => 0
         };
     }
