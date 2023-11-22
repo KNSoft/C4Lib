@@ -73,7 +73,7 @@ public class Symbol
 
     public static Byte[] GetNameBytes(UInt32 NameOffset)
     {
-        return Rtl.CombineArray(BitConverter.GetBytes((UInt32)0), BitConverter.GetBytes(NameOffset));
+        return Rtl.ArrayCombine(BitConverter.GetBytes((UInt32)0), BitConverter.GetBytes(NameOffset));
     }
 
     public static Byte[]? GetNameBytes(String Name)

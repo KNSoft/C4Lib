@@ -80,7 +80,7 @@ public class ArchiveFile
                       ImportName,
                       "__imp_" + ImportName
                   },
-                  Rtl.CombineArray(Rtl.StructToRaw(new ImportObjectHeader(Machine,
+                  Rtl.ArrayCombine(Rtl.StructToRaw(new ImportObjectHeader(Machine,
                                                                           (UInt32)ImportData.Length,
                                                                           0,
                                                                           Type,
@@ -92,7 +92,7 @@ public class ArchiveFile
     {
         Byte[] Bytes = BitConverter.GetBytes(Number);
         Array.Reverse(Bytes);
-        Rtl.WriteToStream(Output, Bytes);
+        Rtl.StreamWrite(Output, Bytes);
     }
 
     public void Write(Stream Output)
@@ -112,12 +112,12 @@ public class ArchiveFile
         SortedSymbols.Sort((a, b) => a.Key.CompareTo(b.Key));
 
         /* Archive File Signature */
-        Rtl.WriteToStream(Output, Start);
+        Rtl.StreamWrite(Output, Start);
 
         /* Linker Members */
         ArchiveMemberHeader FirstAmh = new(ArchiveMemberHeader.LinkerMemberName, sizeof(UInt32) +                           // Number of Symbols
-                                                                                 (UInt32)Symbols.Count * sizeof(UInt32)     // Offsets
-                                                                                 + StringTableSize                          // String Table
+                                                                                 (UInt32)Symbols.Count * sizeof(UInt32) +   // Offsets
+                                                                                 StringTableSize                            // String Table
                                                                                  );
         ArchiveMemberHeader SecondAmh = new(ArchiveMemberHeader.LinkerMemberName, sizeof(UInt32) * 2 +                      // Number of Members, Number of Symbols
                                                                                   (UInt32)Imports.Count * sizeof(UInt32) +  // Offsets
@@ -137,7 +137,7 @@ public class ArchiveFile
         }
 
         /* Write First Linker Member */
-        Rtl.WriteToStream(Output, Rtl.StructToRaw(FirstAmh.NativeStruct));
+        Rtl.StreamWrite(Output, Rtl.StructToRaw(FirstAmh.NativeStruct));
         WriteBigEndian(Output, (UInt32)Symbols.Count);
         foreach (var Symbol in Symbols)
         {
@@ -145,7 +145,7 @@ public class ArchiveFile
         }
         foreach (var Symbol in Symbols)
         {
-            Rtl.WriteToStream(Output, Encoding.ASCII.GetBytes(Symbol.Key + '\0'));
+            Rtl.StreamWrite(Output, Encoding.ASCII.GetBytes(Symbol.Key + '\0'));
         }
         if (FirstAmh.Size % 2 != 0)
         {
@@ -153,13 +153,13 @@ public class ArchiveFile
         }
 
         /* Second Linker Member */
-        Rtl.WriteToStream(Output, Rtl.StructToRaw(SecondAmh.NativeStruct));
-        Rtl.WriteToStream(Output, BitConverter.GetBytes((UInt32)Imports.Count));
+        Rtl.StreamWrite(Output, Rtl.StructToRaw(SecondAmh.NativeStruct));
+        Rtl.StreamWrite(Output, BitConverter.GetBytes((UInt32)Imports.Count));
         foreach (Import Import in Imports)
         {
-            Rtl.WriteToStream(Output, BitConverter.GetBytes(Offset + Import.Offset));
+            Rtl.StreamWrite(Output, BitConverter.GetBytes(Offset + Import.Offset));
         }
-        Rtl.WriteToStream(Output, BitConverter.GetBytes((UInt32)Symbols.Count));
+        Rtl.StreamWrite(Output, BitConverter.GetBytes((UInt32)Symbols.Count));
         foreach (var Symbol in SortedSymbols)
         {
             Int32 ImportIndex = Imports.IndexOf(Symbol.Value);
@@ -167,11 +167,11 @@ public class ArchiveFile
             {
                 throw new IndexOutOfRangeException();
             }
-            Rtl.WriteToStream(Output, BitConverter.GetBytes((UInt16)(ImportIndex + 1)));
+            Rtl.StreamWrite(Output, BitConverter.GetBytes((UInt16)(ImportIndex + 1)));
         }
         foreach (var Symbol in SortedSymbols)
         {
-            Rtl.WriteToStream(Output, Encoding.ASCII.GetBytes(Symbol.Key + '\0'));
+            Rtl.StreamWrite(Output, Encoding.ASCII.GetBytes(Symbol.Key + '\0'));
         }
         if (SecondAmh.Size % 2 != 0)
         {
@@ -181,10 +181,10 @@ public class ArchiveFile
         /* Longnames Member */
         if (LongnamesAmh != null)
         {
-            Rtl.WriteToStream(Output, Rtl.StructToRaw(LongnamesAmh.NativeStruct));
+            Rtl.StreamWrite(Output, Rtl.StructToRaw(LongnamesAmh.NativeStruct));
             foreach (var Longname in LongnamesTable)
             {
-                Rtl.WriteToStream(Output, Longname.Value);
+                Rtl.StreamWrite(Output, Longname.Value);
                 Output.WriteByte(0);
             }
             if (LongnamesAmh.Size % 2 != 0)
@@ -196,8 +196,8 @@ public class ArchiveFile
         /* Import headers and data */
         foreach (Import Import in Imports)
         {
-            Rtl.WriteToStream(Output, Rtl.StructToRaw(Import.Header.NativeStruct));
-            Rtl.WriteToStream(Output, Import.Data);
+            Rtl.StreamWrite(Output, Rtl.StructToRaw(Import.Header.NativeStruct));
+            Rtl.StreamWrite(Output, Import.Data);
             if (Import.Data.Length % 2 != 0)
             {
                 Output.WriteByte(Pad);

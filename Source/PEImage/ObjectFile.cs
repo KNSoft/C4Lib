@@ -90,12 +90,12 @@ public class ObjectFile
     public void Write(Stream Output)
     {
         /* Write file header (IMAGE_FILE_HEADER) */
-        Rtl.WriteToStream(Output, Rtl.StructToRaw(FileHeader.NativeStruct));
+        Rtl.StreamWrite(Output, Rtl.StructToRaw(FileHeader.NativeStruct));
 
         /* Write section headers (IMAGE_SECTION_HEADER) */
         foreach (Section Section in Sections)
         {
-            Rtl.WriteToStream(Output, Rtl.StructToRaw(Section.Header.NativeStruct));
+            Rtl.StreamWrite(Output, Rtl.StructToRaw(Section.Header.NativeStruct));
         }
 
         /* Write section data and relocations */
@@ -103,13 +103,13 @@ public class ObjectFile
         {
             if (Section.Data.Length > 0)
             {
-                Rtl.WriteToStream(Output, Section.Data);
+                Rtl.StreamWrite(Output, Section.Data);
             }
             if (Section.Relocations != null)
             {
                 foreach (Relocation Relocation in Section.Relocations)
                 {
-                    Rtl.WriteToStream(Output, Rtl.StructToRaw(Relocation.NativeStruct));
+                    Rtl.StreamWrite(Output, Rtl.StructToRaw(Relocation.NativeStruct));
                 }
             }
         }
@@ -117,14 +117,14 @@ public class ObjectFile
         /* Write symbols (IMAGE_SYMBOL) */
         foreach (Symbol Symbol in Symbols)
         {
-            Rtl.WriteToStream(Output, Rtl.StructToRaw(Symbol.NativeStruct));
+            Rtl.StreamWrite(Output, Rtl.StructToRaw(Symbol.NativeStruct));
         }
 
         /* Write string table */
-        Rtl.WriteToStream(Output, BitConverter.GetBytes((UInt32)(sizeof(UInt32) + StringTable.Sum(x => x.Value.Length) + StringTable.Count)));
+        Rtl.StreamWrite(Output, BitConverter.GetBytes((UInt32)(sizeof(UInt32) + StringTable.Sum(x => x.Value.Length) + StringTable.Count)));
         foreach (var StringTableItem in StringTable)
         {
-            Rtl.WriteToStream(Output, StringTableItem.Value);
+            Rtl.StreamWrite(Output, StringTableItem.Value);
             Output.WriteByte(0);
         }
     }

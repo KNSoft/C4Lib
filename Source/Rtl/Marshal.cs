@@ -1,22 +1,24 @@
 ﻿using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
+using System.IO;
 
 namespace KNSoft.C4Lib;
 
 static partial class Rtl
 {
-    public static T? RawToStruct<T>(Byte[] Bytes) where T : new()
+    public static T RawToStruct<T>(Byte[] Bytes) where T : new()
     {
         Type anyType = new T().GetType();
         int RawSize = Marshal.SizeOf(anyType);
-        if (RawSize > Bytes.Length)
+        if (RawSize != Bytes.Length)
         {
-            return default;
+            throw new InvalidDataException();
         }
+
         IntPtr buffer = Marshal.AllocHGlobal(RawSize);
         Marshal.Copy(Bytes, 0, buffer, RawSize);
-        T? obj = (T?)Marshal.PtrToStructure(buffer, anyType);
+        T obj = (T)Marshal.PtrToStructure(buffer, anyType);
         Marshal.FreeHGlobal(buffer);
         return obj;
     }
