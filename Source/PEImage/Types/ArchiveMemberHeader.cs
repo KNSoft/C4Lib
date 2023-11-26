@@ -1,4 +1,6 @@
 ﻿using System;
+using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -37,6 +39,8 @@ public class ArchiveMemberHeader
     /* Public properties */
     public IMAGE_ARCHIVE_MEMBER_HEADER NativeStruct;
     public UInt32 Size;
+
+    /* Create new */
     public ArchiveMemberHeader(Byte[] NameBytes, UInt32 Size)
     {
         Byte[] FilledNameBytes = new Byte[16];
@@ -59,6 +63,32 @@ public class ArchiveMemberHeader
             Size = Encoding.ASCII.GetBytes(MemberSize + new String(' ', 10 - MemberSize.Length)),
             EndHeader = ArchiveFile.End
         };
+    }
+
+    /* Load existing */
+    public ArchiveMemberHeader(Byte[] RawData)
+    {
+        NativeStruct = Rtl.RawToStruct<IMAGE_ARCHIVE_MEMBER_HEADER>(RawData);
+
+        /* Verify data */
+        if (!NativeStruct.EndHeader.SequenceEqual(ArchiveFile.End))
+        {
+            throw new InvalidDataException();
+        }
+
+        /* Fill members */
+        Int32 i;
+        for (i = 0; i < NativeStruct.Size.Length; i++)
+        {
+            if (NativeStruct.Size[i] == (Byte)' ')
+            {
+                break;
+            } else if (!Char.IsDigit((Char)NativeStruct.Size[i]))
+            {
+                throw new InvalidDataException();
+            }
+        }
+        Size = UInt32.Parse(Encoding.ASCII.GetString(NativeStruct.Size, 0, i));
     }
 
     public static Byte[] GetNameBytes(UInt32 NameOffset)

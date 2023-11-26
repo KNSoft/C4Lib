@@ -13,23 +13,140 @@ public class ArchiveFile
     public static readonly Byte[] End = { 0x60, 0x0A };
     public static readonly Byte Pad = 0x0A;
 
-    public IMAGE_FILE_MACHINE Machine;
-
-    public readonly List<KeyValuePair<UInt32, Byte[]>> LongnamesTable = new(); // Offset in Longnames -> String
-
     public class Import
     {
         public required ArchiveMemberHeader Header;
         public required String[] SymbolNames;
-        public UInt32 Offset; // Relative to the first symbol
+        public UInt32 Offset; // On write, relative to the first symbol; on read, absolute file offset
         public required Byte[] Data;
     }
 
-    private readonly List<Import> Imports = new();
+    public readonly List<KeyValuePair<UInt32, Byte[]>> LongnamesTable = new(); // Offset in Longnames -> String
+    public readonly List<Import> Imports = new();
 
-    public ArchiveFile(IMAGE_FILE_MACHINE Machine)
+    /* Create new */
+    public ArchiveFile() { }
+
+    /* Load existing */
+    public ArchiveFile(Byte[] RawData)
     {
-        this.Machine = Machine;
+        if (!Rtl.ArrayResize(RawData, Start.Length).SequenceEqual(Start))
+        {
+            throw new InvalidDataException();
+        }
+
+        ArchiveMemberHeader amh;
+        ASCIIEncoding ASCIIEnc = new ASCIIEncoding();
+        Int32 Offset, EndOffset, StartOffset, StartIndex;
+
+        /* Skip 1st Linker Member */
+        amh = new(Rtl.ArraySlice(RawData, Start.Length, Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>()));
+        if (!amh.NativeStruct.Name.SequenceEqual(ArchiveMemberHeader.LinkerMemberName))
+        {
+            throw new InvalidDataException();
+        }
+        Offset = Start.Length + Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>() + (Int32)amh.Size;
+        Offset += Offset % 2;
+
+        /* Read 2nd Linker Member */
+        amh = new(Rtl.ArraySlice(RawData, Offset, Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>()));
+        if (!amh.NativeStruct.Name.SequenceEqual(ArchiveMemberHeader.LinkerMemberName))
+        {
+            throw new InvalidDataException();
+        }
+        Offset += Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>();
+        EndOffset = Offset + (Int32)amh.Size;
+
+        /* Members */
+        UInt32 MemberCount = BitConverter.ToUInt32(RawData, Offset);
+        Offset += sizeof(UInt32);
+        List<UInt32> MemberOffsets = new List<UInt32>();
+        UInt32 MemberOffset, PrevMemberOffset = 0;
+        for (UInt32 i = 0; i < MemberCount; i++)
+        {
+            MemberOffset = BitConverter.ToUInt32(RawData, Offset);
+            if (MemberOffset < PrevMemberOffset)
+            {
+                throw new InvalidDataException();
+            }
+            MemberOffsets.Add(MemberOffset);
+            PrevMemberOffset = MemberOffset;
+            Offset += sizeof(UInt32);
+        }
+
+        /* Symbols */
+        UInt32 SymbolCount = BitConverter.ToUInt32(RawData, Offset);
+        List<UInt16> SymbolIndices = new List<UInt16>();
+        UInt16 SymbolIndice;
+        Offset += sizeof(UInt32);
+        for (UInt32 i = 0; i < SymbolCount; i++)
+        {
+            SymbolIndice = BitConverter.ToUInt16(RawData, Offset);
+            if (SymbolIndice > MemberOffsets.Count)
+            {
+                throw new InvalidDataException();
+            }
+            SymbolIndices.Add(SymbolIndice);
+            Offset += sizeof(UInt16);
+        }
+
+        /* Strings */
+        List<String> Strings = new List<String>();
+        StartIndex = Offset;
+        while (Offset < EndOffset)
+        {
+            if (RawData[Offset] == '\0')
+            {
+                if (Strings.Count >= SymbolCount)
+                {
+                    throw new InvalidDataException();
+                }
+                Strings.Add(ASCIIEnc.GetString(RawData, StartIndex, Offset - StartIndex));
+                StartIndex = Offset + 1;
+            }
+            Offset++;
+        }
+        Offset += Offset % 2;
+
+        /* Longnames Member */
+        amh = new(Rtl.ArraySlice(RawData, Offset, Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>()));
+        if (amh.NativeStruct.Name.SequenceEqual(ArchiveMemberHeader.LongNamesMemberName))
+        {
+            Offset += Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>();
+            EndOffset = Offset + (Int32)amh.Size;
+            StartOffset = StartIndex = Offset;
+            while (Offset < EndOffset)
+            {
+                if (RawData[Offset] == '\0')
+                {
+                    LongnamesTable.Add(new((UInt32)(StartIndex - StartOffset), Rtl.ArraySlice(RawData, StartIndex, Offset - StartIndex)));
+                    StartIndex = Offset + 1;
+                }
+                Offset++;
+            }
+        }
+
+        /* Resolve imports */
+        for (Int32 i = 0; i < MemberOffsets.Count; i++)
+        {
+            amh = new(Rtl.ArraySlice(RawData, (Int32)MemberOffsets[i], Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>()));
+            List<String> SymbolNames = new List<string>();
+            for (Int32 j = 0; j < SymbolIndices.Count; j++)
+            {
+                if (SymbolIndices[j] == (Int16)i + 1)
+                {
+                    SymbolNames.Add(Strings[j]);
+                }
+            }
+
+            Imports.Add(new()
+            {
+                Header = amh,
+                SymbolNames = SymbolNames.ToArray(),
+                Offset = MemberOffsets[i],
+                Data = Rtl.ArraySlice(RawData, (Int32)MemberOffsets[i] + Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>(), (Int32)amh.Size)
+            });
+        }
     }
 
     public void AddImport(String ArchiveMemberName, String[] SymbolNames, Byte[] Data)
@@ -69,9 +186,11 @@ public class ArchiveFile
 
         ObjectFile.Write(ObjectFileStream);
         AddImport(ArchiveMemberName, ObjectFile.SymbolNames.ToArray(), ObjectFileStream.ToArray());
+
+        ObjectFileStream.Dispose();
     }
 
-    public void AddImport(IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType, String DllName, String ImportName)
+    public void AddImport(IMAGE_FILE_MACHINE Machine, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType, String DllName, String ImportName)
     {
         Byte[] ImportData = ImportObjectHeader.GetImportNameBuffer(DllName, ImportName);
 
