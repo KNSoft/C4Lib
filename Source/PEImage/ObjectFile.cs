@@ -25,13 +25,13 @@ public class ObjectFile
 
     public FileHeader FileHeader;
 
-    public readonly List<Section> Sections = new();
+    public readonly List<Section> Sections = [];
 
-    public readonly List<Symbol> Symbols = new();
+    public readonly List<Symbol> Symbols = [];
 
-    public readonly List<KeyValuePair<UInt32, Byte[]>> StringTable = new(); // Offset -> String
+    public readonly List<KeyValuePair<UInt32, Byte[]>> StringTable = []; // Offset -> String
 
-    public readonly List<String> SymbolNames = new();
+    public readonly List<String> SymbolNames = [];
 
     public ObjectFile(IMAGE_FILE_MACHINE Machine, IMAGE_FILE_CHARACTERISTICS AdditionalFileCharacteristics)
     {
@@ -166,12 +166,11 @@ public class ObjectFile
         /* Add sections */
         UInt16 idata2Index = NewObject.AddSection(new(".idata$2",
                                                       new Byte[Marshal.SizeOf<IMAGE_IMPORT_DESCRIPTOR>()],
-                                                      new Relocation[]
-                                                      {
+                                                      [
                                                           new(0xC, 2, RelocType),
                                                           new(0x0, 3, RelocType),
                                                           new(0x10, 4, RelocType)
-                                                      },
+                                                      ],
                                                       (IMAGE_SCN)SectionHeader.SCN.idata | IMAGE_SCN.ALIGN_4BYTES));
         UInt16 idata6Index = NewObject.AddSection(new(".idata$6",
                                                       Encoding.ASCII.GetBytes(DllName + (DllName.Length % 2 == 0 ? "\0\0" : "\0")),

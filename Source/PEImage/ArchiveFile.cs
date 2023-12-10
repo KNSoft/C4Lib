@@ -10,7 +10,7 @@ namespace KNSoft.C4Lib.PEImage;
 public class ArchiveFile
 {
     public static readonly Byte[] Start = "!<arch>\n"u8.ToArray();
-    public static readonly Byte[] End = { 0x60, 0x0A };
+    public static readonly Byte[] End = [0x60, 0x0A];
     public static readonly Byte Pad = 0x0A;
 
     public class Import
@@ -21,8 +21,8 @@ public class ArchiveFile
         public required Byte[] Data;
     }
 
-    public readonly List<KeyValuePair<UInt32, Byte[]>> LongnamesTable = new(); // Offset in Longnames -> String
-    public readonly List<Import> Imports = new();
+    public readonly List<KeyValuePair<UInt32, Byte[]>> LongnamesTable = []; // Offset in Longnames -> String
+    public readonly List<Import> Imports = [];
 
     /* Create new */
     public ArchiveFile() { }
@@ -60,7 +60,7 @@ public class ArchiveFile
         /* Members */
         UInt32 MemberCount = BitConverter.ToUInt32(RawData, Offset);
         Offset += sizeof(UInt32);
-        List<UInt32> MemberOffsets = new List<UInt32>();
+        List<UInt32> MemberOffsets = [];
         UInt32 MemberOffset, PrevMemberOffset = 0;
         for (UInt32 i = 0; i < MemberCount; i++)
         {
@@ -76,7 +76,7 @@ public class ArchiveFile
 
         /* Symbols */
         UInt32 SymbolCount = BitConverter.ToUInt32(RawData, Offset);
-        List<UInt16> SymbolIndices = new List<UInt16>();
+        List<UInt16> SymbolIndices = [];
         UInt16 SymbolIndice;
         Offset += sizeof(UInt32);
         for (UInt32 i = 0; i < SymbolCount; i++)
@@ -91,7 +91,7 @@ public class ArchiveFile
         }
 
         /* Strings */
-        List<String> Strings = new List<String>();
+        List<String> Strings = [];
         StartIndex = Offset;
         while (Offset < EndOffset)
         {
@@ -130,7 +130,7 @@ public class ArchiveFile
         for (Int32 i = 0; i < MemberOffsets.Count; i++)
         {
             amh = new(Rtl.ArraySlice(RawData, (Int32)MemberOffsets[i], Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>()));
-            List<String> SymbolNames = new List<string>();
+            List<String> SymbolNames = [];
             for (Int32 j = 0; j < SymbolIndices.Count; j++)
             {
                 if (SymbolIndices[j] == (Int16)i + 1)
@@ -142,7 +142,7 @@ public class ArchiveFile
             Imports.Add(new()
             {
                 Header = amh,
-                SymbolNames = SymbolNames.ToArray(),
+                SymbolNames = [.. SymbolNames],
                 Offset = MemberOffsets[i],
                 Data = Rtl.ArraySlice(RawData, (Int32)MemberOffsets[i] + Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>(), (Int32)amh.Size)
             });
@@ -195,10 +195,10 @@ public class ArchiveFile
         Byte[] ImportData = ImportObjectHeader.GetImportNameBuffer(DllName, ImportName);
 
         AddImport(DllName,
-                  new[] {
+                  [
                       ImportName,
                       "__imp_" + ImportName
-                  },
+                  ],
                   Rtl.ArrayCombine(Rtl.StructToRaw(new ImportObjectHeader(Machine,
                                                                           (UInt32)ImportData.Length,
                                                                           0,
@@ -218,7 +218,7 @@ public class ArchiveFile
     {
         /* Transform import list to symbol list and calculate size of string table */
         UInt32 StringTableSize = 0;
-        List<KeyValuePair<String, Import>> Symbols = new();
+        List<KeyValuePair<String, Import>> Symbols = [];
         foreach (Import Import in Imports)
         {
             foreach (String SymbolName in Import.SymbolNames)

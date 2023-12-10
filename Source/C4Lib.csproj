@@ -7,6 +7,9 @@
     <Nullable>enable</Nullable>
     <NoWin32Manifest>true</NoWin32Manifest>
     
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+    
     <Company>KNSoft</Company>
     <RepositoryUrl>https://github.com/KNSoft/C4Lib</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
