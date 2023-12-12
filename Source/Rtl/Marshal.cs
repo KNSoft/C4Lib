@@ -18,7 +18,7 @@ static partial class Rtl
 
         IntPtr buffer = Marshal.AllocHGlobal(RawSize);
         Marshal.Copy(Bytes, 0, buffer, RawSize);
-        T obj = (T)Marshal.PtrToStructure(buffer, anyType);
+        T obj = (T?)Marshal.PtrToStructure(buffer, anyType) ?? throw new InvalidDataException();
         Marshal.FreeHGlobal(buffer);
         return obj;
     }
