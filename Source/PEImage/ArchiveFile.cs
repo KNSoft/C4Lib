@@ -16,12 +16,14 @@ public class ArchiveFile
     public class Import
     {
         public required ArchiveMemberHeader Header;
+        public required String Name;
         public required String[] SymbolNames;
         public UInt32 Offset; // On write, relative to the first symbol; on read, absolute file offset
         public required Byte[] Data;
     }
 
-    public readonly List<KeyValuePair<UInt32, Byte[]>> LongnamesTable = []; // Offset in Longnames -> String
+    private readonly List<KeyValuePair<UInt32, Byte[]>> LongnamesTable = []; // Offset in Longnames -> String
+
     public readonly List<Import> Imports = [];
 
     /* Create new */
@@ -139,8 +141,12 @@ public class ArchiveFile
                 }
             }
 
+            String? Name = amh.GetName(out var LongnameOffset);
+            Name ??= Encoding.ASCII.GetString(LongnamesTable.Find(x => x.Key == LongnameOffset).Value);
+
             Imports.Add(new()
             {
+                Name = Name,
                 Header = amh,
                 SymbolNames = [.. SymbolNames],
                 Offset = MemberOffsets[i],
@@ -172,6 +178,7 @@ public class ArchiveFile
 
         Imports.Add(new()
         {
+            Name = ArchiveMemberName,
             Header = new ArchiveMemberHeader(NameBytes, (UInt32)Data.Length),
             SymbolNames = SymbolNames,
             Offset = Offset,
@@ -237,12 +244,12 @@ public class ArchiveFile
         ArchiveMemberHeader FirstAmh = new(ArchiveMemberHeader.LinkerMemberName, sizeof(UInt32) +                           // Number of Symbols
                                                                                  (UInt32)Symbols.Count * sizeof(UInt32) +   // Offsets
                                                                                  StringTableSize                            // String Table
-                                                                                 );
+                                           );
         ArchiveMemberHeader SecondAmh = new(ArchiveMemberHeader.LinkerMemberName, sizeof(UInt32) * 2 +                      // Number of Members, Number of Symbols
                                                                                   (UInt32)Imports.Count * sizeof(UInt32) +  // Offsets
                                                                                   (UInt32)Symbols.Count * sizeof(UInt16) +  // Indices
                                                                                   StringTableSize                           // String Table
-                                                                                  );
+                                            );
         ArchiveMemberHeader? LongnamesAmh = LongnamesTable.Count > 0 ? new(ArchiveMemberHeader.LongNamesMemberName,
                                                                            (UInt32)(LongnamesTable.Sum(x => x.Value.Length) + LongnamesTable.Count)) : null;
 

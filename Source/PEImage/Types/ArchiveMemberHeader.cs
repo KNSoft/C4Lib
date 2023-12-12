@@ -31,7 +31,7 @@ public class ArchiveMemberHeader
     public static readonly Byte[] LinkerMemberName = "/               "u8.ToArray();
     public static readonly Byte[] LongNamesMemberName = "//              "u8.ToArray();
 
-    /* Private constants */ 
+    /* Private constants */
     private static readonly Byte[] DummyDate = "-1          "u8.ToArray();
     private static readonly Byte[] DummyID = "      "u8.ToArray();
     private static readonly Byte[] DummyMode = "0       "u8.ToArray();
@@ -77,18 +77,37 @@ public class ArchiveMemberHeader
         }
 
         /* Fill members */
+        Int32 i = ASCIIBytesToInt(NativeStruct.Size, 0);
+        Size = i >= 0 ? (UInt32)i : throw new InvalidDataException();
+    }
+
+    public String? GetName(out UInt32? LongnameOffset)
+    {
         Int32 i;
-        for (i = 0; i < NativeStruct.Size.Length; i++)
+
+        if (NativeStruct.Name[0] == '/')
         {
-            if (NativeStruct.Size[i] == (Byte)' ')
+            i = ASCIIBytesToInt(NativeStruct.Name, 1);
+            LongnameOffset = i >= 0 ? (UInt32)i : throw new InvalidDataException();
+            return null;
+        } else
+        {
+            for (i = 0; i < NativeStruct.Name.Length; i++)
             {
-                break;
-            } else if (!Char.IsDigit((Char)NativeStruct.Size[i]))
+                if (NativeStruct.Name[i] == '/')
+                {
+                    break;
+                }
+            }
+            if (i < NativeStruct.Name.Length)
+            {
+                LongnameOffset = null;
+                return Encoding.ASCII.GetString(NativeStruct.Name, 0, i);
+            } else
             {
                 throw new InvalidDataException();
             }
         }
-        Size = UInt32.Parse(Encoding.ASCII.GetString(NativeStruct.Size, 0, i));
     }
 
     public static Byte[] GetNameBytes(UInt32 NameOffset)
@@ -106,5 +125,27 @@ public class ArchiveMemberHeader
         }
 
         return NameBytes;
+    }
+
+    private static Int32 ASCIIBytesToInt(Byte[] Bytes, Int32 StartIndex)
+    {
+        Int32 i;
+
+        for (i = StartIndex; i < Bytes.Length; i++)
+        {
+            if (Bytes[i] == (Byte)' ')
+            {
+                break;
+            } else if (!Char.IsDigit((Char)Bytes[i]))
+            {
+                throw new InvalidDataException();
+            }
+        }
+        if (i == 0)
+        {
+            throw new InvalidDataException();
+        }
+
+        return Int32.Parse(Encoding.ASCII.GetString(Bytes, StartIndex, i));
     }
 }
