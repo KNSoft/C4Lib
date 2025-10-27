@@ -10,6 +10,14 @@ namespace KNSoft.C4Lib.CodeHelper;
 
 public class Cpp
 {
+    public class CodeFragment
+    {
+        public static readonly String PragmaOnce = "#pragma once\r\n\r\n";
+        public static readonly String ExternCStart = "EXTERN_C_START\r\n\r\n";
+        public static readonly String ExternCEnd = "EXTERN_C_END\r\n";
+        public static readonly String AutoGenerateFileComment = "/* This file was auto-generated, do not change this file manually */\r\n\r\n";
+    }
+
     public static StreamWriter CreateOutputFile(String Path, Boolean Append, Boolean HasUtf8Bom)
     {
         return new(Path, Append, new UTF8Encoding(HasUtf8Bom), 4096);
