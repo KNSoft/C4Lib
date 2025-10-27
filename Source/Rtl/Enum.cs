@@ -9,9 +9,9 @@ static partial class Rtl
     {
         Dictionary<String, Int32> Map = [];
 
-        foreach (var Value in Enum.GetValues(enumType))
+        foreach (object Value in Enum.GetValues(enumType))
         {
-            Map.Add(Enum.GetName(enumType, Value), Convert.ToInt32(Value));
+            Map.Add(Enum.GetName(enumType, Value) ?? throw new Exception(), Convert.ToInt32(Value));
         }
 
         return Map;
