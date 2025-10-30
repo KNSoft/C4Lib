@@ -192,7 +192,7 @@ public class ArchiveFile
         MemoryStream ObjectFileStream = new();
 
         ObjectFile.Write(ObjectFileStream);
-        AddImport(ArchiveMemberName, ObjectFile.SymbolNames.ToArray(), ObjectFileStream.ToArray());
+        AddImport(ArchiveMemberName, [.. ObjectFile.SymbolNames], ObjectFileStream.ToArray());
 
         ObjectFileStream.Dispose();
     }
@@ -234,7 +234,7 @@ public class ArchiveFile
                 StringTableSize += (UInt32)SymbolName.Length + 1;
             }
         }
-        List<KeyValuePair<String, Import>> SortedSymbols = new(Symbols);
+        List<KeyValuePair<String, Import>> SortedSymbols = [.. Symbols];
         SortedSymbols.Sort((a, b) => a.Key.CompareTo(b.Key));
 
         /* Archive File Signature */

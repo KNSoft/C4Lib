@@ -9,18 +9,11 @@ namespace KNSoft.C4Lib.PEImage;
 
 public class ObjectFile
 {
-    public class Section
+    public class Section(String Name, Byte[] Data, Relocation[]? Relocations, IMAGE_SCN Characteristics)
     {
-        public SectionHeader Header;
-        public Byte[] Data;
-        public Relocation[]? Relocations;
-
-        public Section(String Name, Byte[] Data, Relocation[]? Relocations, IMAGE_SCN Characteristics)
-        {
-            Header = new(Name, 0, (UInt32)Data.Length, 0, (UInt16)(Relocations == null ? 0 : Relocations.Length), Characteristics);
-            this.Data = Data;
-            this.Relocations = Relocations;
-        }
+        public SectionHeader Header = new(Name, 0, (UInt32)Data.Length, 0, (UInt16)(Relocations == null ? 0 : Relocations.Length), Characteristics);
+        public Byte[] Data = Data;
+        public Relocation[]? Relocations = Relocations;
     }
 
     public FileHeader FileHeader;
