@@ -93,11 +93,20 @@ public class Cpp
             {
                 Param.LineComment = LineComments[LineNum];
             }
-            Param.Prefixes.Reverse();
             if (String.IsNullOrEmpty(Param.Type))
             {
                 Param.Type = Param.Name;
                 Param.Name = String.Empty;
+            }
+            if (Param.Name.StartsWith("*"))
+            {
+                Param.Name = Param.Name[1..];
+                Param.Type += '*';
+            }
+            if (Param.Type == "*")
+            {
+                Param.Type = Param.Prefixes[0] + '*';
+                Param.Prefixes.RemoveAt(0);
             }
             if (Param.Type == "VOID" || Param.Type == "void")
             {
@@ -110,6 +119,7 @@ public class Cpp
             {
                 Param.FixedSize = 8;
             }
+            Param.Prefixes.Reverse();
             Func.Parameters.Add(Param);
         }
 
