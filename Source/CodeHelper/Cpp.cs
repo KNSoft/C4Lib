@@ -194,7 +194,7 @@ public class Cpp
                         Func.Content += LineContent + '\n';
                     }
                     Func.Content = Func.Content[0..(Func.Content.Length - 1)];
-                    Comments = [.. Comments.Reverse()];
+                    Array.Reverse(Comments);
 
                     /* Backward scan declaration, skip ';' */
 
