@@ -197,7 +197,7 @@ public class ArchiveFile
         ObjectFileStream.Dispose();
     }
 
-    public void AddImport(IMAGE_FILE_MACHINE Machine, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType, String DllName, String ImportName)
+    public void AddImport(IMAGE_FILE_MACHINE Machine, UInt16 OrdinalOrHint, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType, String DllName, String ImportName)
     {
         Byte[] ImportData = ImportObjectHeader.GetImportNameBuffer(DllName, ImportName);
 
@@ -208,7 +208,7 @@ public class ArchiveFile
                   ],
                   Rtl.ArrayCombine(Rtl.StructToRaw(new ImportObjectHeader(Machine,
                                                                           (UInt32)ImportData.Length,
-                                                                          0,
+                                                                          OrdinalOrHint,
                                                                           Type,
                                                                           NameType).NativeStruct),
                                    ImportData));

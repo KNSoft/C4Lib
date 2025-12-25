@@ -29,7 +29,7 @@ public struct IMPORT_OBJECT_HEADER
     public UInt16 Machine;
     public UInt32 TimeDateStamp;
     public UInt32 SizeOfData;
-    public UInt16 Ordinal;
+    public UInt16 OrdinalOrHint;
     public UInt16 Type;
 }
 
@@ -54,7 +54,7 @@ public class ImportObjectHeader
 
     public IMPORT_OBJECT_HEADER NativeStruct;
 
-    public ImportObjectHeader(IMAGE_FILE_MACHINE Machine, UInt32 SizeOfData, UInt16 Ordinal, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType)
+    public ImportObjectHeader(IMAGE_FILE_MACHINE Machine, UInt32 SizeOfData, UInt16 OrdinalOrHint, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType)
     {
         NativeStruct = new IMPORT_OBJECT_HEADER()
         {
@@ -64,7 +64,7 @@ public class ImportObjectHeader
             Machine = (UInt16)Machine,
             TimeDateStamp = 0,
             SizeOfData = SizeOfData,
-            Ordinal = Ordinal,
+            OrdinalOrHint = OrdinalOrHint,
             Type = (UInt16)(((Byte)Type & 0b11) | (((Byte)NameType & 0b111) << 2))
         };
     }
