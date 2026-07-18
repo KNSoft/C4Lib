@@ -126,7 +126,7 @@ public class ObjectFile
 
     public static ObjectFile NewNullIIDObject(IMAGE_FILE_MACHINE Machine)
     {
-        ObjectFile NewObject = new(Machine, IMAGE_FILE_CHARACTERISTICS.DEBUG_STRIPPED);
+        ObjectFile NewObject = new(GetImportObjectMachine(Machine), IMAGE_FILE_CHARACTERISTICS.DEBUG_STRIPPED);
 
         UInt16 idata3Index = NewObject.AddSection(new(".idata$3",
                                                       new Byte[Marshal.SizeOf<IMAGE_IMPORT_DESCRIPTOR>()],
@@ -145,6 +145,7 @@ public class ObjectFile
 
     public static ObjectFile NewDllImportStubObject(IMAGE_FILE_MACHINE Machine, String DllName)
     {
+        Machine = GetImportObjectMachine(Machine);
         ObjectFile NewObject = new(Machine, IMAGE_FILE_CHARACTERISTICS.DEBUG_STRIPPED);
 
         UInt16 RelocType = Machine switch
@@ -190,5 +191,10 @@ public class ObjectFile
         NewObject.AddSymbol('\x7F' + DllShortName + "_NULL_THUNK_DATA", 0, (Int16)(idata5Index + 1), IMAGE_SYM_TYPE.NULL, IMAGE_SYM_DTYPE.NULL, IMAGE_SYM_CLASS.EXTERNAL);
 
         return NewObject;
+    }
+
+    private static IMAGE_FILE_MACHINE GetImportObjectMachine(IMAGE_FILE_MACHINE Machine)
+    {
+        return Machine == IMAGE_FILE_MACHINE.ARM64EC ? IMAGE_FILE_MACHINE.ARM64 : Machine;
     }
 }

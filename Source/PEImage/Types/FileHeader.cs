@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.InteropServices;
 
 namespace KNSoft.C4Lib.PEImage;
@@ -8,6 +9,7 @@ public enum IMAGE_FILE_MACHINE : UInt16
     UNKNOWN = 0x0,
     I386 = 0x14C,
     AMD64 = 0x8664,
+    ARM64EC = 0xA641,
     ARM64 = 0xAA64,
     ARM = 0x1C0,
     ARMNT = 0x1C4
@@ -34,6 +36,8 @@ public struct IMAGE_FILE_HEADER
 
 public class FileHeader
 {
+    private static readonly Int32 HeaderSize = Marshal.SizeOf<IMAGE_FILE_HEADER>();
+
     public static IMAGE_FILE_MACHINE GetMachineType(String Name)
     {
         return Name switch
@@ -44,6 +48,8 @@ public class FileHeader
             "x64" => IMAGE_FILE_MACHINE.AMD64,
             "AMD64" => IMAGE_FILE_MACHINE.AMD64,
             "x86_64" => IMAGE_FILE_MACHINE.AMD64,
+
+            "ARM64EC" => IMAGE_FILE_MACHINE.ARM64EC,
 
             "ARM64" => IMAGE_FILE_MACHINE.ARM64,
 
@@ -61,6 +67,7 @@ public class FileHeader
         {
             IMAGE_FILE_MACHINE.I386 => 32,
             IMAGE_FILE_MACHINE.AMD64 => 64,
+            IMAGE_FILE_MACHINE.ARM64EC => 64,
             IMAGE_FILE_MACHINE.ARM64 => 64,
             IMAGE_FILE_MACHINE.ARM => 32,
             IMAGE_FILE_MACHINE.ARMNT => 32,
@@ -74,6 +81,15 @@ public class FileHeader
     }
 
     public IMAGE_FILE_HEADER NativeStruct;
+
+    public FileHeader(Byte[] RawData)
+    {
+        if (RawData.Length < HeaderSize)
+        {
+            throw new InvalidDataException();
+        }
+        NativeStruct = Rtl.RawToStruct<IMAGE_FILE_HEADER>(Rtl.ArraySlice(RawData, 0, HeaderSize));
+    }
 
     public FileHeader(IMAGE_FILE_MACHINE Machine, UInt16 NumberOfSections, UInt32 TimeDateStamp, UInt32 PointerToSymbolTable, UInt32 NumberOfSymbols, UInt16 SizeOfOptionalHeader, IMAGE_FILE_CHARACTERISTICS Characteristics)
     {

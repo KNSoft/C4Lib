@@ -30,6 +30,7 @@ public class ArchiveMemberHeader
     /* Well-known name constants */
     public static readonly Byte[] LinkerMemberName = "/               "u8.ToArray();
     public static readonly Byte[] LongNamesMemberName = "//              "u8.ToArray();
+    public static readonly Byte[] ECSymbolsMemberName = "/<ECSYMBOLS>/   "u8.ToArray();
 
     /* Private constants */
     private static readonly Byte[] DummyDate = "-1          "u8.ToArray();

@@ -15,7 +15,8 @@ public enum IMAGE_SYM_CLASS : SByte
 {
     EXTERNAL = 0x0002,
     STATIC = 0x0003,
-    SECTION = 0x0068
+    SECTION = 0x0068,
+    WEAK_EXTERNAL = 0x0069
 }
 
 /* MSB */
@@ -34,7 +35,7 @@ public enum IMAGE_SYM_DTYPE : Byte
 [StructLayout(LayoutKind.Explicit, Pack = 1)]
 public struct IMAGE_SYMBOL
 {
-    [MarshalAs(UnmanagedType.ByValArray, ArraySubType = UnmanagedType.U8, SizeConst = 8)]
+    [MarshalAs(UnmanagedType.ByValArray, ArraySubType = UnmanagedType.U8, SizeConst = Symbol.IMAGE_SIZEOF_SHORT_NAME)]
     [FieldOffset(0)]
     public Byte[] ShortName;
     [FieldOffset(8)]
@@ -53,8 +54,52 @@ public struct IMAGE_SYMBOL
     public Byte NumberOfAuxSymbols;
 }
 
+[StructLayout(LayoutKind.Explicit, Pack = 1)]
+public struct IMAGE_SYMBOL_EX
+{
+    [MarshalAs(UnmanagedType.ByValArray, ArraySubType = UnmanagedType.U8, SizeConst = Symbol.IMAGE_SIZEOF_SHORT_NAME)]
+    [FieldOffset(0)]
+    public Byte[] ShortName;
+    [FieldOffset(8)]
+    public UInt32 Value;
+    [FieldOffset(12)]
+    public Int32 SectionNumber;
+    [FieldOffset(16)]
+    public UInt16 Type;
+    [FieldOffset(16)]
+    public Byte TypeMSB;
+    [FieldOffset(17)]
+    public Byte TypeLSB;
+    [FieldOffset(18)]
+    public SByte StorageClass;
+    [FieldOffset(19)]
+    public Byte NumberOfAuxSymbols;
+}
+
+[StructLayout(LayoutKind.Explicit, Pack = 1, Size = 18)]
+public struct IMAGE_AUX_SYMBOL_WEAK_EXTERNAL
+{
+    [FieldOffset(0)]
+    public UInt32 TagIndex;
+    [FieldOffset(4)]
+    public UInt32 Characteristics;
+}
+
+[StructLayout(LayoutKind.Explicit, Pack = 1, Size = 20)]
+public struct IMAGE_AUX_SYMBOL_WEAK_EXTERNAL_EX
+{
+    [FieldOffset(0)]
+    public UInt32 TagIndex;
+    [FieldOffset(4)]
+    public UInt32 Characteristics;
+}
+
 public class Symbol
 {
+    public const UInt32 IMAGE_SYM_SECTION_MAX = 0xFEFF;
+    public const Int32 IMAGE_SIZEOF_SHORT_NAME = 8;
+    public const Byte WEAK_EXTERNAL_AUXILIARY_SYMBOL_COUNT = 1;
+
     public IMAGE_SYMBOL NativeStruct;
 
     public Symbol(Byte[] NameBytes, UInt32 Value, Int16 SectionNumber, IMAGE_SYM_TYPE TypeMSB, IMAGE_SYM_DTYPE TypeLSB,IMAGE_SYM_CLASS StorageClass)
@@ -78,7 +123,7 @@ public class Symbol
 
     public static Byte[]? GetNameBytes(String Name)
     {
-        Byte[] NameBytes = new Byte[8];
+        Byte[] NameBytes = new Byte[IMAGE_SIZEOF_SHORT_NAME];
         Byte[] SourceNameBytes = Encoding.UTF8.GetBytes(Name);
 
         if (SourceNameBytes.Length > NameBytes.Length)

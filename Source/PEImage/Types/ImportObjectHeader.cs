@@ -37,17 +37,22 @@ public class ImportObjectHeader
 {
     public static readonly UInt16 IMPORT_OBJECT_HDR_SIG2 = 0xFFFF;
 
-    public static Byte[] GetImportNameBuffer(String DllName, String DllExportName)
+    public static Byte[] GetImportNameBuffer(String DllName, String DllExportName, String? ExportAsName = null)
     {
         Byte[] Data;
         Byte[] DllExportNameBytes = Encoding.ASCII.GetBytes(DllExportName);
         Byte[] DllNameBytes = Encoding.ASCII.GetBytes(DllName);
+        Byte[] ExportAsNameBytes = ExportAsName == null ? [] : Encoding.ASCII.GetBytes(ExportAsName);
 
-        Data = new Byte[DllExportNameBytes.Length + 1 + DllNameBytes.Length + 1];
+        Data = new Byte[DllExportNameBytes.Length + 1 + DllNameBytes.Length + 1 + (ExportAsName == null ? 0 : ExportAsNameBytes.Length + 1)];
         Buffer.BlockCopy(DllExportNameBytes, 0, Data, 0, DllExportNameBytes.Length);
         Data[DllExportNameBytes.Length] = (Byte)'\0';
         Buffer.BlockCopy(DllNameBytes, 0, Data, DllExportNameBytes.Length + 1, DllNameBytes.Length);
         Data[DllExportNameBytes.Length + 1 + DllNameBytes.Length] = (Byte)'\0';
+        if (ExportAsName != null)
+        {
+            Buffer.BlockCopy(ExportAsNameBytes, 0, Data, DllExportNameBytes.Length + 1 + DllNameBytes.Length + 1, ExportAsNameBytes.Length);
+        }
 
         return Data;
     }

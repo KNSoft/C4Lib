@@ -18,6 +18,7 @@ public class ArchiveFile
         public required ArchiveMemberHeader Header;
         public required String Name;
         public required String[] SymbolNames;
+        public required String[] ECSymbolNames;
         public UInt32 Offset; // On write, relative to the first symbol; on read, absolute file offset
         public required Byte[] Data;
     }
@@ -126,6 +127,49 @@ public class ArchiveFile
                 }
                 Offset++;
             }
+            Offset += Offset % 2;
+        }
+
+        /* ARM64EC Symbols Member */
+        List<UInt16> ECSymbolIndices = [];
+        List<String> ECSymbolNames = [];
+        amh = new(Rtl.ArraySlice(RawData, Offset, Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>()));
+        if (amh.NativeStruct.Name.SequenceEqual(ArchiveMemberHeader.ECSymbolsMemberName))
+        {
+            Offset += Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>();
+            EndOffset = Offset + (Int32)amh.Size;
+
+            UInt32 ECSymbolCount = BitConverter.ToUInt32(RawData, Offset);
+            Offset += sizeof(UInt32);
+            for (UInt32 i = 0; i < ECSymbolCount; i++)
+            {
+                SymbolIndice = BitConverter.ToUInt16(RawData, Offset);
+                if (SymbolIndice > MemberOffsets.Count)
+                {
+                    throw new InvalidDataException();
+                }
+                ECSymbolIndices.Add(SymbolIndice);
+                Offset += sizeof(UInt16);
+            }
+
+            StartIndex = Offset;
+            while (Offset < EndOffset)
+            {
+                if (RawData[Offset] == '\0')
+                {
+                    if (ECSymbolNames.Count >= ECSymbolCount)
+                    {
+                        throw new InvalidDataException();
+                    }
+                    ECSymbolNames.Add(ASCIIEnc.GetString(RawData, StartIndex, Offset - StartIndex));
+                    StartIndex = Offset + 1;
+                }
+                Offset++;
+            }
+            if (ECSymbolNames.Count != ECSymbolCount)
+            {
+                throw new InvalidDataException();
+            }
         }
 
         /* Resolve imports */
@@ -140,6 +184,14 @@ public class ArchiveFile
                     SymbolNames.Add(Strings[j]);
                 }
             }
+            List<String> ImportECSymbolNames = [];
+            for (Int32 j = 0; j < ECSymbolIndices.Count; j++)
+            {
+                if (ECSymbolIndices[j] == (Int16)i + 1)
+                {
+                    ImportECSymbolNames.Add(ECSymbolNames[j]);
+                }
+            }
 
             String? Name = amh.GetName(out var LongnameOffset);
             Name ??= Encoding.ASCII.GetString(LongnamesTable.Find(x => x.Key == LongnameOffset).Value);
@@ -149,6 +201,7 @@ public class ArchiveFile
                 Name = Name,
                 Header = amh,
                 SymbolNames = [.. SymbolNames],
+                ECSymbolNames = [.. ImportECSymbolNames],
                 Offset = MemberOffsets[i],
                 Data = Rtl.ArraySlice(RawData, (Int32)MemberOffsets[i] + Marshal.SizeOf<IMAGE_ARCHIVE_MEMBER_HEADER>(), (Int32)amh.Size)
             });
@@ -156,6 +209,11 @@ public class ArchiveFile
     }
 
     public void AddImport(String ArchiveMemberName, String[] SymbolNames, Byte[] Data)
+    {
+        AddImport(ArchiveMemberName, SymbolNames, [], Data);
+    }
+
+    public void AddImport(String ArchiveMemberName, String[] SymbolNames, String[] ECSymbolNames, Byte[] Data)
     {
         UInt32 Offset;
         Byte[]? NameBytes = ArchiveMemberHeader.GetNameBytes(ArchiveMemberName);
@@ -181,6 +239,7 @@ public class ArchiveFile
             Name = ArchiveMemberName,
             Header = new ArchiveMemberHeader(NameBytes, (UInt32)Data.Length),
             SymbolNames = SymbolNames,
+            ECSymbolNames = ECSymbolNames,
             Offset = Offset,
             Data = Data
         });
@@ -188,24 +247,64 @@ public class ArchiveFile
 
     public void AddImport(String ArchiveMemberName, ObjectFile ObjectFile)
     {
+        AddImport(ArchiveMemberName, ObjectFile, []);
+    }
+
+    public void AddImport(String ArchiveMemberName, ObjectFile ObjectFile, String[] ECSymbolNames)
+    {
 
         MemoryStream ObjectFileStream = new();
 
         ObjectFile.Write(ObjectFileStream);
-        AddImport(ArchiveMemberName, [.. ObjectFile.SymbolNames], ObjectFileStream.ToArray());
+        AddImport(ArchiveMemberName, [.. ObjectFile.SymbolNames], ECSymbolNames, ObjectFileStream.ToArray());
 
         ObjectFileStream.Dispose();
     }
 
     public void AddImport(IMAGE_FILE_MACHINE Machine, UInt16 OrdinalOrHint, IMPORT_OBJECT_TYPE Type, IMPORT_OBJECT_NAME_TYPE NameType, String DllName, String ImportName)
     {
-        Byte[] ImportData = ImportObjectHeader.GetImportNameBuffer(DllName, ImportName);
+        String ObjectImportName = ImportName;
+        String? ExportAsName = null;
+        String[] SymbolNames;
+        String[] ECSymbolNames;
+
+        if (Machine == IMAGE_FILE_MACHINE.ARM64EC)
+        {
+            SymbolNames = [];
+            if (Type == IMPORT_OBJECT_TYPE.CODE)
+            {
+                ObjectImportName = '#' + ImportName;
+                ECSymbolNames =
+                [
+                    ObjectImportName,
+                    ImportName,
+                    "__imp_" + ImportName,
+                    "__imp_aux_" + ImportName
+                ];
+                if (NameType != IMPORT_OBJECT_NAME_TYPE.ORDINAL)
+                {
+                    NameType = IMPORT_OBJECT_NAME_TYPE.NAME_EXPORTAS;
+                    ExportAsName = ImportName;
+                }
+            } else
+            {
+                ECSymbolNames = ["__imp_" + ImportName];
+            }
+        } else
+        {
+            SymbolNames =
+            [
+                ImportName,
+                "__imp_" + ImportName
+            ];
+            ECSymbolNames = [];
+        }
+
+        Byte[] ImportData = ImportObjectHeader.GetImportNameBuffer(DllName, ObjectImportName, ExportAsName);
 
         AddImport(DllName,
-                  [
-                      ImportName,
-                      "__imp_" + ImportName
-                  ],
+                  SymbolNames,
+                  ECSymbolNames,
                   Rtl.ArrayCombine(Rtl.StructToRaw(new ImportObjectHeader(Machine,
                                                                           (UInt32)ImportData.Length,
                                                                           OrdinalOrHint,
@@ -225,7 +324,9 @@ public class ArchiveFile
     {
         /* Transform import list to symbol list and calculate size of string table */
         UInt32 StringTableSize = 0;
+        UInt32 ECStringTableSize = 0;
         List<KeyValuePair<String, Import>> Symbols = [];
+        List<KeyValuePair<String, Import>> ECSymbols = [];
         foreach (Import Import in Imports)
         {
             foreach (String SymbolName in Import.SymbolNames)
@@ -233,9 +334,16 @@ public class ArchiveFile
                 Symbols.Add(new(SymbolName, Import));
                 StringTableSize += (UInt32)SymbolName.Length + 1;
             }
+            foreach (String SymbolName in Import.ECSymbolNames)
+            {
+                ECSymbols.Add(new(SymbolName, Import));
+                ECStringTableSize += (UInt32)SymbolName.Length + 1;
+            }
         }
         List<KeyValuePair<String, Import>> SortedSymbols = [.. Symbols];
         SortedSymbols.Sort((a, b) => a.Key.CompareTo(b.Key));
+        List<KeyValuePair<String, Import>> SortedECSymbols = [.. ECSymbols];
+        SortedECSymbols.Sort((a, b) => a.Key.CompareTo(b.Key));
 
         /* Archive File Signature */
         Rtl.StreamWrite(Output, Start);
@@ -252,6 +360,10 @@ public class ArchiveFile
                                             );
         ArchiveMemberHeader? LongnamesAmh = LongnamesTable.Count > 0 ? new(ArchiveMemberHeader.LongNamesMemberName,
                                                                            (UInt32)(LongnamesTable.Sum(x => x.Value.Length) + LongnamesTable.Count)) : null;
+        ArchiveMemberHeader? ECSymbolsAmh = ECSymbols.Count > 0 ? new(ArchiveMemberHeader.ECSymbolsMemberName,
+                                                                       sizeof(UInt32) +
+                                                                       (UInt32)ECSymbols.Count * sizeof(UInt16) +
+                                                                       ECStringTableSize) : null;
 
         /* Calculate import offsets */
         UInt32 Offset = (UInt32)(Start.Length +
@@ -260,6 +372,10 @@ public class ArchiveFile
         if (LongnamesAmh != null)
         {
             Offset += (UInt32)Marshal.SizeOf(LongnamesAmh.NativeStruct) + LongnamesAmh.Size + (LongnamesAmh.Size % 2);
+        }
+        if (ECSymbolsAmh != null)
+        {
+            Offset += (UInt32)Marshal.SizeOf(ECSymbolsAmh.NativeStruct) + ECSymbolsAmh.Size + (ECSymbolsAmh.Size % 2);
         }
 
         /* Write First Linker Member */
@@ -314,6 +430,30 @@ public class ArchiveFile
                 Output.WriteByte(0);
             }
             if (LongnamesAmh.Size % 2 != 0)
+            {
+                Output.WriteByte(Pad);
+            }
+        }
+
+        /* ARM64EC Symbols Member */
+        if (ECSymbolsAmh != null)
+        {
+            Rtl.StreamWrite(Output, Rtl.StructToRaw(ECSymbolsAmh.NativeStruct));
+            Rtl.StreamWrite(Output, BitConverter.GetBytes((UInt32)SortedECSymbols.Count));
+            foreach (var Symbol in SortedECSymbols)
+            {
+                Int32 ImportIndex = Imports.IndexOf(Symbol.Value);
+                if (ImportIndex < 0)
+                {
+                    throw new IndexOutOfRangeException();
+                }
+                Rtl.StreamWrite(Output, BitConverter.GetBytes((UInt16)(ImportIndex + 1)));
+            }
+            foreach (var Symbol in SortedECSymbols)
+            {
+                Rtl.StreamWrite(Output, Encoding.ASCII.GetBytes(Symbol.Key + '\0'));
+            }
+            if (ECSymbolsAmh.Size % 2 != 0)
             {
                 Output.WriteByte(Pad);
             }
