@@ -19,6 +19,14 @@ public enum IMAGE_SYM_CLASS : SByte
     WEAK_EXTERNAL = 0x0069
 }
 
+public enum IMAGE_WEAK_EXTERN_SEARCH : UInt32
+{
+    NOLIBRARY = 1,
+    LIBRARY = 2,
+    ALIAS = 3,
+    ANTI_DEPENDENCY = 4
+}
+
 /* MSB */
 public enum IMAGE_SYM_TYPE : Byte
 {
