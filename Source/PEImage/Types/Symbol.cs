@@ -7,8 +7,8 @@ namespace KNSoft.C4Lib.PEImage;
 public enum IMAGE_SYM : Int16
 {
     UNDEFINED = 0,
-    ABSOLUTE = 1,
-    DEBUG = 2
+    ABSOLUTE = -1,
+    DEBUG = -2
 }
 
 public enum IMAGE_SYM_CLASS : SByte

@@ -85,7 +85,7 @@ public class ArchiveFile
         for (UInt32 i = 0; i < SymbolCount; i++)
         {
             SymbolIndice = BitConverter.ToUInt16(RawData, Offset);
-            if (SymbolIndice > MemberOffsets.Count)
+            if (SymbolIndice == 0 || SymbolIndice > MemberOffsets.Count)
             {
                 throw new InvalidDataException();
             }
@@ -144,7 +144,7 @@ public class ArchiveFile
             for (UInt32 i = 0; i < ECSymbolCount; i++)
             {
                 SymbolIndice = BitConverter.ToUInt16(RawData, Offset);
-                if (SymbolIndice > MemberOffsets.Count)
+                if (SymbolIndice == 0 || SymbolIndice > MemberOffsets.Count)
                 {
                     throw new InvalidDataException();
                 }
@@ -341,9 +341,9 @@ public class ArchiveFile
             }
         }
         List<KeyValuePair<String, Import>> SortedSymbols = [.. Symbols];
-        SortedSymbols.Sort((a, b) => a.Key.CompareTo(b.Key));
+        SortedSymbols.Sort((a, b) => StringComparer.Ordinal.Compare(a.Key, b.Key));
         List<KeyValuePair<String, Import>> SortedECSymbols = [.. ECSymbols];
-        SortedECSymbols.Sort((a, b) => a.Key.CompareTo(b.Key));
+        SortedECSymbols.Sort((a, b) => StringComparer.Ordinal.Compare(a.Key, b.Key));
 
         /* Archive File Signature */
         Rtl.StreamWrite(Output, Start);
